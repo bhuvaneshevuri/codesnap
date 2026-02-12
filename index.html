@@ -685,13 +685,14 @@
         }
 
         // ============================================================
-        // CORE: Call Browserless REST API directly
+        // CORE: Call Browserless via proxy (avoids CORS)
         // ============================================================
         async function callBrowserless(html, width, height, scale, selector = null) {
             const token = getToken();
             if (!token) { openSettings(); throw new Error('Please add your Browserless API token in Settings.'); }
 
             const payload = {
+                token: token,
                 html: html,
                 options: {
                     type: 'png',
@@ -706,7 +707,7 @@
                 gotoOptions: { waitUntil: 'networkidle2', timeout: 25000 },
             };
 
-            const res = await fetch(`https://production-sfo.browserless.io/screenshot?token=${token}`, {
+            const res = await fetch('/api/screenshot', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -714,7 +715,7 @@
 
             if (!res.ok) {
                 let errorMsg = `Rendering failed (${res.status})`;
-                try { const err = await res.json(); errorMsg = err.message || errorMsg; }
+                try { const err = await res.json(); errorMsg = err.error || err.message || errorMsg; }
                 catch { try { errorMsg = (await res.text()).substring(0, 200); } catch { } }
                 throw new Error(errorMsg);
             }
