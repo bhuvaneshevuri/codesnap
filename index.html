@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeSnap — HTML to Image Studio</title>
+    <meta name="description"
+        content="Convert HTML/CSS code into high-quality social media images, carousels, and PDFs. Free, no backend required.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease;
+        }
+
+        .pulse {
+            animation: pulse 1.5s ease infinite;
+        }
+
+        /* Preview */
+        #previewContainer {
+            transition: aspect-ratio 0.3s ease;
+        }
+
+        /* Modals */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            max-width: 900px;
+            width: 95%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 30px;
+        }
+
+        /* Template Cards */
+        .template-card {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            border-color: #38bdf8;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(56, 189, 248, 0.15);
+        }
+
+        /* Slide Nav */
+        .slide-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 8px 0;
+        }
+
+        .slide-nav button {
+            background: #334155;
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            transition: background 0.2s;
+        }
+
+        .slide-nav button:hover {
+            background: #3b82f6;
+        }
+
+        .slide-nav button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .slide-nav span {
+            font-size: 13px;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        /* Reference Guide */
+        .ref-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+
+        .ref-table th {
+            background: #1e293b;
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 700;
+            color: #38bdf8;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #334155;
+        }
+
+        .ref-table td {
+            padding: 9px 14px;
+            border-bottom: 1px solid #1e293b;
+            color: #cbd5e1;
+        }
+
+        .ref-table tr:hover td {
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        .ref-table .highlight {
+            color: #34d399;
+            font-weight: 700;
+        }
+
+        .ref-table .dim {
+            color: #64748b;
+        }
+
+        .ref-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .badge-green {
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+        }
+
+        .badge-blue {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+        }
+
+        .badge-amber {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+        }
+
+        .badge-purple {
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 800;
+            margin: 24px 0 10px;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title:first-child {
+            margin-top: 0;
+        }
+
+        /* Settings token input */
+        .token-input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #e2e8f0;
+            font-family: monospace;
+            font-size: 13px;
+            width: 100%;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .token-input:focus {
+            border-color: #3b82f6;
+        }
+
+        .token-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        .token-ok {
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+        }
+
+        .token-missing {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- Header -->
+        <header class="flex flex-wrap justify-between items-center mb-8 border-b border-slate-800 pb-6 gap-4">
+            <div>
+                <h1
+                    class="text-2xl font-black bg-gradient-to-r from-violet-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+                    ⚡ CodeSnap</h1>
+                <p class="text-slate-500 text-sm font-medium">HTML → Image, PDF & Carousels. Powered by Browserless.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="openSettings()" id="settingsBtn"
+                    class="bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold transition text-sm border border-slate-700">
+                    ⚙️ <span id="tokenStatusBadge"></span>
+                </button>
+                <button onclick="openGuide()"
+                    class="bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold transition text-sm border border-slate-700">ℹ️
+                    Guide</button>
+                <button onclick="openTemplates()"
+                    class="bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl font-bold transition text-sm border border-slate-700">📋
+                    Templates</button>
+                <button onclick="generate('png')" id="mainBtn"
+                    class="bg-blue-600 hover:bg-blue-500 px-5 py-2.5 rounded-xl font-bold transition shadow-lg shadow-blue-900/30 disabled:opacity-50 text-sm">Generate
+                    PNG</button>
+                <button onclick="generate('pdf')" id="pdfBtn"
+                    class="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-xl font-bold transition shadow-lg shadow-emerald-900/30 disabled:opacity-50 text-sm">📄
+                    PDF</button>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">1. Preset</label>
+                <select id="presetSelect" title="Social Media Preset" onchange="updatePreviewAspect()"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-cyan-400 font-semibold">
+                    <option value="1080x1080">Instagram Square (1080×1080)</option>
+                    <option value="1080x1350" selected>LinkedIn Carousel (1080×1350)</option>
+                    <option value="1200x627">LinkedIn Post (1200×627)</option>
+                    <option value="1080x1920">Story / Reel (1080×1920)</option>
+                </select>
+            </div>
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">2. Quality</label>
+                <select id="qualitySelect" title="Image Quality"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm outline-none text-cyan-400 font-semibold">
+                    <option value="1.5">Standard (Web)</option>
+                    <option value="2.0" selected>High (Retina)</option>
+                    <option value="3.0">Ultra (Print)</option>
+                </select>
+                <p class="text-xs mt-2 text-emerald-400 font-medium">⚡ All via Browserless Cloud</p>
+            </div>
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">3. Import</label>
+                <input type="file" id="fileInput" title="Import HTML File" accept=".html"
+                    class="text-xs text-slate-400 file:bg-slate-700 file:border-0 file:rounded-full file:px-3 file:py-1.5 file:text-white cursor-pointer file:font-semibold file:text-xs" />
+            </div>
+        </div>
+
+        <!-- Status bar -->
+        <div id="statusBar"
+            class="hidden mb-4 bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3 fade-in">
+            <div class="spinner"></div>
+            <span id="statusText" class="text-sm text-cyan-400 font-medium">Rendering...</span>
+        </div>
+
+        <!-- Editor + Preview -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" style="min-height: 60vh;">
+            <textarea id="htmlInput"
+                class="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-sm outline-none resize-none focus:border-blue-500 transition-colors text-slate-300"
+                placeholder="Paste your HTML/CSS here..." oninput="updatePreview()"></textarea>
+            <div>
+                <div id="slideNav" class="slide-nav hidden mb-2">
+                    <button onclick="navigateSlide(-1)" id="prevSlide" disabled>◀</button>
+                    <span id="slideIndicator">Slide 1 / 1</span>
+                    <button onclick="navigateSlide(1)" id="nextSlide">▶</button>
+                </div>
+                <div id="previewContainer"
+                    class="bg-white rounded-xl overflow-hidden border-2 border-slate-800 shadow-2xl"
+                    style="aspect-ratio: 1080/1350;">
+                    <iframe id="preview" title="Live Preview" class="w-full h-full bg-white"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-center text-slate-700 text-xs mt-6">Tip: Use class="slide" on each element for multi-image export
+            &amp; slide navigation.</p>
+    </div>
+
+    <!-- ==================== SETTINGS MODAL ==================== -->
+    <div id="settingsModal" class="modal-backdrop hidden" onclick="if(event.target===this)closeSettings()">
+        <div class="modal-content" style="max-width: 550px;">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">⚙️ Settings</h2>
+                <button onclick="closeSettings()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-2">Browserless API Token</label>
+                <p class="text-xs text-slate-500 mb-3">Get your free token from <a href="https://www.browserless.io"
+                        target="_blank" class="text-cyan-400 hover:underline">browserless.io</a> (1,000 renders/month
+                    free).</p>
+                <input type="password" id="tokenInput" class="token-input"
+                    placeholder="Paste your Browserless API token..." />
+            </div>
+            <div class="flex justify-between items-center">
+                <div id="tokenSaveStatus"></div>
+                <button onclick="saveToken()"
+                    class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-lg font-bold text-sm transition">Save
+                    Token</button>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-4 mt-5 border border-slate-700">
+                <p class="text-xs text-slate-400"><strong class="text-cyan-400">🔒 Security:</strong> Your token is
+                    stored in your browser's localStorage only. It never leaves your device except for direct API calls
+                    to Browserless.io.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TEMPLATE GALLERY MODAL ==================== -->
+    <div id="templateModal" class="modal-backdrop hidden" onclick="if(event.target===this)closeTemplates()">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">📋 Template Gallery</h2>
+                <button onclick="closeTemplates()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <p class="text-slate-400 text-sm mb-6">Click any template to load it. All optimized for LinkedIn Carousel
+                (1080×1350).</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="templateGrid"></div>
+        </div>
+    </div>
+
+    <!-- ==================== REFERENCE GUIDE MODAL ==================== -->
+    <div id="guideModal" class="modal-backdrop hidden" onclick="if(event.target===this)closeGuide()">
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">ℹ️ Output Reference Guide</h2>
+                <button onclick="closeGuide()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <p class="text-slate-400 text-sm mb-6">Complete map of output dimensions for every Quality × Format × Preset
+                combination.</p>
+
+            <div class="section-title">📐 PNG Output Dimensions</div>
+            <p class="text-slate-500 text-xs mb-3">Scale multiplies the base viewport. Higher scale = sharper image.</p>
+            <table class="ref-table">
+                <thead>
+                    <tr>
+                        <th>Preset</th>
+                        <th>Base</th>
+                        <th>Standard (1.5×)</th>
+                        <th>High (2×)</th>
+                        <th>Ultra (3×)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Instagram Square</strong></td>
+                        <td class="dim">1080×1080</td>
+                        <td>1620×1620</td>
+                        <td class="highlight">2160×2160</td>
+                        <td>3240×3240</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LinkedIn Carousel</strong></td>
+                        <td class="dim">1080×1350</td>
+                        <td>1620×2025</td>
+                        <td class="highlight">2160×2700</td>
+                        <td>3240×4050</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LinkedIn Post</strong></td>
+                        <td class="dim">1200×627</td>
+                        <td>1800×940</td>
+                        <td class="highlight">2400×1254</td>
+                        <td>3600×1881</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Story / Reel</strong></td>
+                        <td class="dim">1080×1920</td>
+                        <td>1620×2880</td>
+                        <td class="highlight">2160×3840</td>
+                        <td>3240×5760</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="section-title">📄 PDF Export Specifications</div>
+            <table class="ref-table">
+                <thead>
+                    <tr>
+                        <th>Preset</th>
+                        <th>Page Size</th>
+                        <th>Orientation</th>
+                        <th>Pages</th>
+                        <th>Best For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Instagram Square</strong></td>
+                        <td>1080×1080</td>
+                        <td><span class="ref-badge badge-blue">Square</span></td>
+                        <td>1 per .slide</td>
+                        <td class="dim">IG carousel</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LinkedIn Carousel</strong></td>
+                        <td>1080×1350</td>
+                        <td><span class="ref-badge badge-green">Portrait</span></td>
+                        <td>1 per .slide</td>
+                        <td class="dim">LinkedIn doc post ⭐</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LinkedIn Post</strong></td>
+                        <td>1200×627</td>
+                        <td><span class="ref-badge badge-amber">Landscape</span></td>
+                        <td>1</td>
+                        <td class="dim">Single-image</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Story / Reel</strong></td>
+                        <td>1080×1920</td>
+                        <td><span class="ref-badge badge-purple">Tall</span></td>
+                        <td>1 per .slide</td>
+                        <td class="dim">IG/FB/WA stories</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="section-title">🎯 Recommended Combinations</div>
+            <table class="ref-table">
+                <thead>
+                    <tr>
+                        <th>Use Case</th>
+                        <th>Preset</th>
+                        <th>Quality</th>
+                        <th>Format</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>LinkedIn carousel</strong></td>
+                        <td>LinkedIn Carousel</td>
+                        <td><span class="ref-badge badge-green">High</span></td>
+                        <td><span class="ref-badge badge-blue">PDF</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>LinkedIn single image</strong></td>
+                        <td>LinkedIn Post</td>
+                        <td><span class="ref-badge badge-green">High</span></td>
+                        <td><span class="ref-badge badge-blue">PNG</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Instagram post</strong></td>
+                        <td>Instagram Square</td>
+                        <td><span class="ref-badge badge-green">High</span></td>
+                        <td><span class="ref-badge badge-blue">PNG</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Story / Reel</strong></td>
+                        <td>Story / Reel</td>
+                        <td><span class="ref-badge badge-amber">Standard</span></td>
+                        <td><span class="ref-badge badge-blue">PNG</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Print / Portfolio</strong></td>
+                        <td>LinkedIn Carousel</td>
+                        <td><span class="ref-badge badge-purple">Ultra</span></td>
+                        <td><span class="ref-badge badge-blue">PNG</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="bg-slate-800 rounded-xl p-4 mt-2 border border-slate-700">
+                <p class="text-xs text-slate-400"><strong class="text-cyan-400">💡 How it works:</strong> Your HTML is
+                    sent to Browserless.io's cloud browser, rendered at the selected viewport, and returned as a
+                    high-res PNG. For PDFs, each <code class="text-cyan-400">.slide</code> element becomes a separate
+                    page.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== JAVASCRIPT ==================== -->
+    <script>
+        // ============================================================
+        // TEMPLATES
+        // ============================================================
+        const TEMPLATES = [
+            {
+                name: '💡 Quote Card',
+                desc: 'Clean quote with gradient background. Perfect for thought leadership.',
+                html: `<!DOCTYPE html><html><head><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;font-family:'Montserrat',sans-serif}.slide{width:1080px;height:1350px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:80px;box-sizing:border-box;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.quote{font-size:48px;font-weight:900;line-height:1.3;margin-bottom:40px}.author{font-size:24px;font-weight:400;opacity:0.7}.divider{width:60px;height:4px;background:rgba(255,255,255,0.4);border-radius:2px;margin:30px 0}</style></head><body><div class="slide"><div class="quote">"The best way to predict the future is to create it."</div><div class="divider"></div><div class="author">— Peter Drucker</div></div></body></html>`
+            },
+            {
+                name: '📊 Data Slide',
+                desc: 'Bold stat card with accent bar. Great for industry insights.',
+                html: `<!DOCTYPE html><html><head><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;font-family:'Montserrat',sans-serif}.slide{width:1080px;height:1350px;background:#0f172a;color:white;display:flex;flex-direction:column;justify-content:center;padding:80px;box-sizing:border-box}.eyebrow{font-size:16px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:#38bdf8;margin-bottom:30px}.stat{font-size:120px;font-weight:900;background:linear-gradient(to right,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1;margin-bottom:20px}.body-text{font-size:28px;font-weight:400;opacity:0.7;line-height:1.5;max-width:800px}.accent-bar{width:80px;height:6px;background:linear-gradient(to right,#38bdf8,#818cf8);border-radius:3px;margin:30px 0}</style></head><body><div class="slide"><div class="eyebrow">Industry Insight</div><div class="stat">73%</div><div class="accent-bar"></div><div class="body-text">of pharmaceutical companies report increasing pressure on compliance costs in 2026.</div></div></body></html>`
+            },
+            {
+                name: '📢 Announcement',
+                desc: 'Professional announcement with icon and CTA.',
+                html: `<!DOCTYPE html><html><head><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;font-family:'Montserrat',sans-serif}.slide{width:1080px;height:1350px;background:white;color:#0f172a;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:80px;box-sizing:border-box}.icon{font-size:80px;margin-bottom:30px}.title{font-size:44px;font-weight:900;text-transform:uppercase;margin-bottom:20px;line-height:1.2}.subtitle{font-size:22px;font-weight:400;color:#64748b;line-height:1.5;max-width:700px;margin-bottom:40px}.cta{background:#3b82f6;color:white;padding:18px 50px;border-radius:50px;font-size:20px;font-weight:700;letter-spacing:1px}</style></head><body><div class="slide"><div class="icon">🚀</div><div class="title">We're Hiring!</div><div class="subtitle">Join our growing team of analytical chemistry experts. Remote-friendly positions available.</div><div class="cta">APPLY NOW →</div></div></body></html>`
+            },
+            {
+                name: '🎯 Listicle Carousel (5 slides)',
+                desc: 'Multi-slide carousel with cover + 3 points + CTA.',
+                html: `<!DOCTYPE html><html><head><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet"><style>body{margin:0;padding:40px;background:#1a1a2e;font-family:'Montserrat',sans-serif;display:flex;flex-direction:column;align-items:center;gap:40px}.slide{width:1080px;height:1350px;box-sizing:border-box;overflow:hidden;border-radius:12px;color:white}.s1{background:linear-gradient(135deg,#0f172a,#1e3a5f);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:80px}.s1 .icon{font-size:70px;margin-bottom:30px}.s1 h1{font-size:52px;font-weight:900;margin:0 0 20px;text-transform:uppercase;line-height:1.1}.s1 .sub{font-size:22px;opacity:0.6}.sc{background:#fff;color:#0f172a;display:flex;flex-direction:column;padding:0}.sc .top{background:#0f172a;padding:30px 60px;display:flex;align-items:center;gap:15px}.sc .num{font-size:48px;font-weight:900;color:rgba(255,255,255,0.2)}.sc .top h2{color:white;font-size:28px;font-weight:800;margin:0;text-transform:uppercase}.sc .body{flex:1;padding:60px;display:flex;flex-direction:column;justify-content:center;gap:25px}.sc .body p{font-size:22px;line-height:1.6;color:#334155}.sc .highlight{background:#f1f5f9;border-left:5px solid #3b82f6;padding:20px 25px;border-radius:0 10px 10px 0;font-size:20px;font-weight:600;color:#1e3a5f}.s5{background:linear-gradient(135deg,#0f172a,#1e3a5f);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:80px}.s5 h2{font-size:36px;font-weight:900;margin:0 0 20px}.s5 .sub{font-size:20px;opacity:0.6;margin-bottom:40px}.s5 .cta{font-size:16px;font-weight:700;letter-spacing:3px;opacity:0.4;text-transform:uppercase}</style></head><body><div class="slide s1"><div class="icon">🎯</div><h1>3 Things Every Lab Should Know</h1><div class="sub">Swipe →</div></div><div class="slide sc"><div class="top"><div class="num">01</div><h2>Data Integrity Is Key</h2></div><div class="body"><p>Regulatory bodies are tightening ALCOA+ enforcement. Every lab needs a documented data governance framework.</p><div class="highlight">80% of FDA warning letters cite data integrity failures.</div></div></div><div class="slide sc"><div class="top"><div class="num">02</div><h2>Method Validation Saves Money</h2></div><div class="body"><p>Upfront investment in robust method validation reduces rework and audit findings by 60%.</p><div class="highlight">Prevention costs 1/10th of correction.</div></div></div><div class="slide sc"><div class="top"><div class="num">03</div><h2>Outsourcing ≠ Losing Control</h2></div><div class="body"><p>Strategic partnerships let you scale capacity without fixed overhead. Choose partners with matching quality systems.</p><div class="highlight">Choose partners, not vendors.</div></div></div><div class="slide s5"><h2>Want to Level Up?</h2><div class="sub">Follow for more insights</div><div class="cta">Like · Comment · Share</div></div></body></html>`
+            },
+            {
+                name: '🌈 Gradient Tip',
+                desc: 'Vibrant gradient card for quick tips or hot takes.',
+                html: `<!DOCTYPE html><html><head><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;font-family:'Montserrat',sans-serif}.slide{width:1080px;height:1350px;background:linear-gradient(160deg,#f7971e,#ffd200);display:flex;flex-direction:column;justify-content:center;padding:100px;box-sizing:border-box;color:#1a1a2e}.label{font-size:16px;font-weight:800;letter-spacing:4px;text-transform:uppercase;margin-bottom:30px;opacity:0.6}.title{font-size:52px;font-weight:900;line-height:1.2;margin-bottom:30px}.body{font-size:24px;font-weight:500;line-height:1.6;opacity:0.8;max-width:800px}</style></head><body><div class="slide"><div class="label">💡 Quick Tip</div><div class="title">Stop Treating Your Lab Like a Cost Center</div><div class="body">The best-run companies treat their analytical labs as strategic assets — not overhead. Quality data drives faster approvals, fewer recalls, and stronger market position.</div></div></body></html>`
+            },
+            {
+                name: '⚡ Before / After',
+                desc: 'Split comparison card. Great for transformations.',
+                html: `<!DOCTYPE html><html><head><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;font-family:'Montserrat',sans-serif}.slide{width:1080px;height:1350px;display:flex;flex-direction:column;box-sizing:border-box;color:white}.top-half{flex:1;background:#e74c3c;display:flex;flex-direction:column;justify-content:center;padding:80px}.bot-half{flex:1;background:#27ae60;display:flex;flex-direction:column;justify-content:center;padding:80px}.label{font-size:16px;font-weight:800;letter-spacing:4px;text-transform:uppercase;opacity:0.6;margin-bottom:15px}.text{font-size:36px;font-weight:900;line-height:1.3}</style></head><body><div class="slide"><div class="top-half"><div class="label">❌ Before</div><div class="text">Manually tracking 200+ test results in spreadsheets. Missing deadlines. Audit findings.</div></div><div class="bot-half"><div class="label">✅ After</div><div class="text">Automated LIMS integration. Real-time dashboards. Zero critical audit findings in 2 years.</div></div></div></body></html>`
+            }
+        ];
+
+        // ============================================================
+        // TOKEN MANAGEMENT
+        // ============================================================
+        function getToken() { return localStorage.getItem('codesnap_token') || ''; }
+
+        function saveToken() {
+            const token = document.getElementById('tokenInput').value.trim();
+            if (!token) return;
+            localStorage.setItem('codesnap_token', token);
+            document.getElementById('tokenSaveStatus').innerHTML = '<span class="token-status token-ok">✅ Token saved</span>';
+            updateTokenBadge();
+            setTimeout(closeSettings, 1000);
+        }
+
+        function updateTokenBadge() {
+            const badge = document.getElementById('tokenStatusBadge');
+            if (getToken()) {
+                badge.innerHTML = '<span class="token-status token-ok" style="font-size:11px">Connected</span>';
+            } else {
+                badge.innerHTML = '<span class="token-status token-missing" style="font-size:11px">No Token</span>';
+            }
+        }
+
+        // ============================================================
+        // MODALS
+        // ============================================================
+        function openSettings() {
+            document.getElementById('tokenInput').value = getToken();
+            document.getElementById('tokenSaveStatus').innerHTML = '';
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+        function closeSettings() { document.getElementById('settingsModal').classList.add('hidden'); }
+
+        function openTemplates() {
+            const grid = document.getElementById('templateGrid');
+            grid.innerHTML = TEMPLATES.map((t, i) => `<div class="template-card" onclick="useTemplate(${i})"><div class="text-lg font-bold mb-1">${t.name}</div><p class="text-slate-400 text-sm">${t.desc}</p></div>`).join('');
+            document.getElementById('templateModal').classList.remove('hidden');
+        }
+        function closeTemplates() { document.getElementById('templateModal').classList.add('hidden'); }
+        function useTemplate(i) { document.getElementById('htmlInput').value = TEMPLATES[i].html; updatePreview(); closeTemplates(); }
+
+        function openGuide() { document.getElementById('guideModal').classList.remove('hidden'); }
+        function closeGuide() { document.getElementById('guideModal').classList.add('hidden'); }
+
+        // ============================================================
+        // SLIDE NAVIGATOR
+        // ============================================================
+        let currentSlide = 0, totalSlides = 0;
+
+        function updatePreview() {
+            const iframe = document.getElementById('preview');
+            const doc = iframe.contentDocument;
+            doc.open(); doc.write(document.getElementById('htmlInput').value); doc.close();
+            setTimeout(detectSlides, 300);
+        }
+
+        function detectSlides() {
+            const slides = document.getElementById('preview').contentDocument.querySelectorAll('.slide');
+            totalSlides = slides.length;
+            const nav = document.getElementById('slideNav');
+            if (totalSlides > 1) { nav.classList.remove('hidden'); currentSlide = 0; updateSlideNav(); scrollToSlide(0); }
+            else { nav.classList.add('hidden'); }
+        }
+
+        function navigateSlide(dir) {
+            currentSlide = Math.max(0, Math.min(totalSlides - 1, currentSlide + dir));
+            updateSlideNav(); scrollToSlide(currentSlide);
+        }
+
+        function updateSlideNav() {
+            document.getElementById('slideIndicator').textContent = `Slide ${currentSlide + 1} / ${totalSlides}`;
+            document.getElementById('prevSlide').disabled = currentSlide === 0;
+            document.getElementById('nextSlide').disabled = currentSlide === totalSlides - 1;
+        }
+
+        function scrollToSlide(i) {
+            const slides = document.getElementById('preview').contentDocument.querySelectorAll('.slide');
+            if (slides[i]) slides[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // ============================================================
+        // FILE IMPORT
+        // ============================================================
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => { document.getElementById('htmlInput').value = ev.target.result; updatePreview(); };
+            reader.readAsText(e.target.files[0]);
+        });
+
+        function updatePreviewAspect() {
+            const [w, h] = document.getElementById('presetSelect').value.split('x');
+            document.getElementById('previewContainer').style.aspectRatio = `${w}/${h}`;
+        }
+
+        // ============================================================
+        // CORE: Call Browserless REST API directly
+        // ============================================================
+        async function callBrowserless(html, width, height, scale, selector = null) {
+            const token = getToken();
+            if (!token) { openSettings(); throw new Error('Please add your Browserless API token in Settings.'); }
+
+            const payload = {
+                html: html,
+                options: {
+                    type: 'png',
+                    fullPage: !selector,
+                    ...(selector ? { selector } : {}),
+                },
+                viewport: {
+                    width: parseInt(width),
+                    height: parseInt(height),
+                    deviceScaleFactor: parseFloat(scale),
+                },
+                gotoOptions: { waitUntil: 'networkidle2', timeout: 25000 },
+            };
+
+            const res = await fetch(`https://production-sfo.browserless.io/screenshot?token=${token}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+                let errorMsg = `Rendering failed (${res.status})`;
+                try { const err = await res.json(); errorMsg = err.message || errorMsg; }
+                catch { try { errorMsg = (await res.text()).substring(0, 200); } catch { } }
+                throw new Error(errorMsg);
+            }
+
+            return await res.blob();
+        }
+
+        // ============================================================
+        // GENERATE (PNG or PDF)
+        // ============================================================
+        async function generate(format = 'png') {
+            const html = document.getElementById('htmlInput').value;
+            if (!html) return alert("Please provide HTML content first.");
+
+            const [width, height] = document.getElementById('presetSelect').value.split('x');
+            const scale = document.getElementById('qualitySelect').value;
+            const qualityLabel = document.getElementById('qualitySelect').options[document.getElementById('qualitySelect').selectedIndex].text.split(' ')[0];
+            const mainBtn = document.getElementById('mainBtn');
+            const pdfBtn = document.getElementById('pdfBtn');
+            const statusBar = document.getElementById('statusBar');
+            const statusText = document.getElementById('statusText');
+
+            mainBtn.disabled = true; pdfBtn.disabled = true;
+            const activeBtn = format === 'pdf' ? pdfBtn : mainBtn;
+            activeBtn.innerHTML = `<span class="spinner"></span> Processing...`;
+            statusBar.classList.remove('hidden');
+            statusText.textContent = `⚡ Rendering at ${qualityLabel} quality (${width}×${height})...`;
+
+            try {
+                // Detect slides in the HTML
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const slideCount = doc.querySelectorAll('.slide').length;
+
+                if (slideCount > 1) {
+                    // Multi-slide: screenshot each .slide individually
+                    const images = [];
+                    for (let i = 0; i < slideCount; i++) {
+                        statusText.textContent = `⚡ Rendering slide ${i + 1} of ${slideCount}...`;
+                        const blob = await callBrowserless(html, width, height, scale, `.slide:nth-child(${i + 1})`);
+                        images.push(blob);
+                    }
+
+                    if (format === 'pdf') {
+                        statusText.textContent = '📄 Stitching slides into PDF...';
+                        await imagesToPdf(images, parseInt(width), parseInt(height));
+                    } else {
+                        statusText.textContent = '📦 Creating ZIP...';
+                        await imagesToZip(images);
+                    }
+                } else {
+                    // Single image
+                    const blob = await callBrowserless(html, width, height, scale);
+
+                    if (format === 'pdf') {
+                        statusText.textContent = '📄 Creating PDF...';
+                        await imageToPdf(blob, parseInt(width), parseInt(height));
+                    } else {
+                        downloadBlob(blob, `codesnap-${Date.now()}.png`);
+                    }
+                }
+
+                statusText.textContent = '✅ Done! Check your downloads.';
+                setTimeout(() => statusBar.classList.add('hidden'), 3000);
+
+            } catch (err) {
+                statusText.textContent = '❌ ' + err.message;
+                setTimeout(() => statusBar.classList.add('hidden'), 6000);
+            } finally {
+                mainBtn.disabled = false; pdfBtn.disabled = false;
+                mainBtn.innerHTML = 'Generate PNG';
+                pdfBtn.innerHTML = '📄 PDF';
+            }
+        }
+
+        // ============================================================
+        // PDF & ZIP (client-side)
+        // ============================================================
+        async function imagesToPdf(blobs, w, h) {
+            const { jsPDF } = window.jspdf;
+            const orient = w > h ? 'landscape' : 'portrait';
+            const pdf = new jsPDF({ orientation: orient, unit: 'px', format: [w, h] });
+
+            for (let i = 0; i < blobs.length; i++) {
+                if (i > 0) pdf.addPage([w, h], orient);
+                const imgData = await blobToDataUrl(blobs[i]);
+                pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+            }
+            pdf.save(`codesnap-carousel-${Date.now()}.pdf`);
+        }
+
+        async function imageToPdf(blob, w, h) {
+            const { jsPDF } = window.jspdf;
+            const orient = w > h ? 'landscape' : 'portrait';
+            const pdf = new jsPDF({ orientation: orient, unit: 'px', format: [w, h] });
+            const imgData = await blobToDataUrl(blob);
+            pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+            pdf.save(`codesnap-${Date.now()}.pdf`);
+        }
+
+        async function imagesToZip(blobs) {
+            const zip = new JSZip();
+            for (let i = 0; i < blobs.length; i++) {
+                const buf = await blobs[i].arrayBuffer();
+                zip.file(`slide-${i + 1}.png`, buf);
+            }
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            downloadBlob(zipBlob, `codesnap-slides-${Date.now()}.zip`);
+        }
+
+        // ============================================================
+        // UTILITIES
+        // ============================================================
+        function blobToDataUrl(blob) {
+            return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        updateTokenBadge();
+        updatePreviewAspect();
+    </script>
+</body>
+
+</html>
